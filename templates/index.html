@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Celestial Gravity Simulation - Random Systems & Object Stats</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #000;
+        font-family: sans-serif;
+        color: #fff;
+      }
+      canvas {
+        display: block;
+        background: #000;
+      }
+      #controls {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 10px;
+        border-radius: 5px;
+        z-index: 100;
+      }
+      #controls label {
+        margin-right: 10px;
+      }
+      #controls button {
+        margin-left: 10px;
+      }
+      #info {
+        position: fixed;
+        bottom: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 10px;
+        border-radius: 5px;
+        max-width: 220px;
+        z-index: 101;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <div id="controls">
+      <label for="timeSpeed">
+        Time Speed: <span id="speedValue">1</span>x
+      </label>
+      <input type="range" id="timeSpeed" min="1" max="200" step="0.5" value="1" />
+      <button id="pauseButton">Pause</button>
+      <button id="randomSystemButton">Generate Random System</button>
+      <span>(Drag to pan, scroll to zoom)</span>
+    </div>
+    <div id="info">Click an object to view its stats.</div>
+    <script>
+      // ========= Canvas, Camera, and Resize Setup =========
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+
+      // ---------- Camera Setup ----------
+      // We'll work entirely in world coordinates. (0,0) is the star's location.
+      let camera = {
+        x: 0,
+        y: 0,
+        zoom: 1,
+      };
+
+      // ---------- Time Controls and Pause ----------
+      const timeSpeedSlider = document.getElementById("timeSpeed");
+      const speedValueLabel = document.getElementById("speedValue");
+      let timeMultiplier = parseFloat(timeSpeedSlider.value);
+      timeSpeedSlider.addEventListener("input", () => {
+        timeMultiplier = parseFloat(timeSpeedSlider.value);
+        speedValueLabel.textContent = timeSpeedSlider.value;
+      });
+      let paused = false;
+      const pauseButton = document.getElementById("pauseButton");
+      pauseButton.addEventListener("click", () => {
+        paused = !paused;
+        pauseButton.textContent = paused ? "Resume" : "Pause";
+      });
+
+      // ---------- Adding Random System Generator Button ----------
+      const randomSystemButton = document.getElementById("randomSystemButton");
+      randomSystemButton.addEventListener("click", generateRandomSolarSystem);
+
+      // ---------- Camera Controls: Panning and Zooming ----------
+      let isDragging = false;
+      let dragStart = { x: 0, y: 0 };
+      canvas.addEventListener("mousedown", (e) => {
+        isDragging = true;
+        dragStart.x = e.clientX;
+        dragStart.y = e.clientY;
+      });
+      canvas.addEventListener("mousemove", (e) => {
+        if (isDragging) {
+          let dx = (e.clientX - dragStart.x) / camera.zoom;
+          let dy = (e.clientY - dragStart.y) / camera.zoom;
+          // Only update camera position if not following an object.
+          if (!selectedBody) {
+            camera.x -= dx;
+            camera.y -= dy;
+          }
+          dragStart.x = e.clientX;
+          dragStart.y = e.clientY;
+        }
+      });
+      canvas.addEventListener("mouseup", () => {
+        isDragging = false;
+      });
+      canvas.addEventListener("mouseout", () => {
+        isDragging = false;
+      });
+      canvas.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        let zoomAmount = -e.deltaY * 0.001;
+        camera.zoom = Math.max(
+          0.1,
+          Math.min(camera.zoom * (1 + zoomAmount), 10)
+        );
+      });
+
+      // ========= Global Simulation Parameters =========
+      const G = 0.5; // Scaled Newtonian gravitational constant.
+      const maxTrailLength = 200; // Number of past positions (for trails).
+      // "Speed of light" in simulation units, for potential relativity corrections.
+      const c = 100;
+      // Conversion factor: 1 simulation unit = 1e6 meters.
+      const scaleToMeters = 1e6;
+
+      // ========= Body Class =========
+      class Body {
+        constructor(x, y, mass, radius, color) {
+          this.x = x;
+          this.y = y;
+          this.mass = mass;
+          this.radius = radius;
+          this.color = color;
+          this.vx = 0;
+          this.vy = 0;
+          this.ax = 0;
+          this.ay = 0;
+          this.parent = null; // For satellites (e.g. moons).
+          this.history = []; // For drawing its trail.
+        }
+        update(dt) {
+          // Euler integration for velocity and position:
+          this.vx += this.ax * dt;
+          this.vy += this.ay * dt;
+          this.x += this.vx * dt;
+          this.y += this.vy * dt;
+          this.ax = 0;
+          this.ay = 0;
+          this.history.push({ x: this.x, y: this.y });
+          if (this.history.length > maxTrailLength) {
+            this.history.shift();
+          }
+        }
+        applyForce(fx, fy) {
+          this.ax += fx / this.mass;
+          this.ay += fy / this.mass;
+        }
+        draw(ctx) {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+          ctx.fillStyle = this.color;
+          ctx.fill();
+        }
+      }
+
+      // ========= Utility Functions =========
+      function distanceBetween(b1, b2) {
+        return Math.hypot(b2.x - b1.x, b2.y - b1.y);
+      }
+      // Estimate Hill radius for a satellite.
+      function getHillRadius(body) {
+        if (body === star) return Infinity;
+        let dToStar = Math.hypot(body.x - star.x, body.y - star.y);
+        return dToStar * Math.pow(body.mass / (3 * star.mass), 1 / 3);
+      }
+      // Always merge two bodies on collision.
+      function mergeBodies(b1, b2) {
+        let newMass = b1.mass + b2.mass;
+        let newX = (b1.x * b1.mass + b2.x * b2.mass) / newMass;
+        let newY = (b1.y * b1.mass + b2.y * b2.mass) / newMass;
+        let newVx = (b1.vx * b1.mass + b2.vx * b2.mass) / newMass;
+        let newVy = (b1.vy * b1.mass + b2.vy * b2.mass) / newMass;
+        let newRadius = Math.cbrt(Math.pow(b1.radius, 3) + Math.pow(b2.radius, 3));
+        let newParent = b1.parent === b2.parent ? b1.parent : star;
+        let newColor = b1.mass >= b2.mass ? b1.color : b2.color;
+        let merged = new Body(newX, newY, newMass, newRadius, newColor);
+        merged.vx = newVx;
+        merged.vy = newVy;
+        merged.parent = newParent;
+        merged.history = b1.history.concat(b2.history).slice(-maxTrailLength);
+        return merged;
+      }
+      // Collision resolver that always merges overlapping bodies.
+      function resolveCollision(b1, b2) {
+        return mergeBodies(b1, b2);
+      }
+      // Loop over all pairs and merge colliding bodies.
+      function handleCollisions() {
+        let collisionOccurred = true;
+        while (collisionOccurred) {
+          collisionOccurred = false;
+          outer: for (let i = 0; i < bodies.length; i++) {
+            for (let j = i + 1; j < bodies.length; j++) {
+              let dx = bodies[j].x - bodies[i].x;
+              let dy = bodies[j].y - bodies[i].y;
+              let dist = Math.hypot(dx, dy);
+              if (dist < bodies[i].radius + bodies[j].radius) {
+                let merged = resolveCollision(bodies[i], bodies[j]);
+                bodies.splice(j, 1);
+                bodies.splice(i, 1);
+                bodies.push(merged);
+                collisionOccurred = true;
+                break outer;
+              }
+            }
+          }
+        }
+      }
+      // Draw each body's trail.
+      function drawTrails() {
+        bodies.forEach((body) => {
+          if (body.history.length < 2) return;
+          ctx.save();
+          ctx.beginPath();
+          for (let i = 0; i < body.history.length; i++) {
+            let pt = body.history[i];
+            if (i === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+          }
+          ctx.strokeStyle = body.color;
+          ctx.globalAlpha = 0.5;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+        });
+      }
+
+      // ========= Global Variables for Simulation =========
+      let bodies = [];
+      let star; // the central star
+      let selectedBody = null; // The object that is clicked on and followed.
+      const infoDiv = document.getElementById("info");
+
+      // ========= Click-to-Select & Follow =========
+      canvas.addEventListener("click", (e) => {
+        // Convert click coordinates to world coordinates.
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+        const worldX = (clickX - canvas.width / 2) / camera.zoom + camera.x;
+        const worldY = (clickY - canvas.height / 2) / camera.zoom + camera.y;
+        let clickedBody = null;
+        let minDist = Infinity;
+        for (let body of bodies) {
+          let d = Math.hypot(body.x - worldX, body.y - worldY);
+          if (d < body.radius && d < minDist) {
+            clickedBody = body;
+            minDist = d;
+          }
+        }
+        selectedBody = clickedBody; // May be null if no object was clicked.
+      });
+
+      // ========= Random Solar System Generator =========
+      function getRandomColor() {
+        const colors = ["blue", "red", "orange", "green", "purple", "brown", "gray"];
+        return colors[Math.floor(Math.random() * colors.length)];
+      }
+      function generateRandomSolarSystem() {
+        bodies = []; // Clear existing bodies.
+        // Create the central star at (0,0).
+        star = new Body(0, 0, 10000, 30, "yellow");
+        bodies.push(star);
+        // Generate a random number of planets (say 3 to 7).
+        let numPlanets = Math.floor(Math.random() * 5) + 3;
+        let currentDistance = 100;
+        for (let i = 0; i < numPlanets; i++) {
+          // Increase the distance sequentially.
+          currentDistance += Math.random() * 50 + 50; // Increase by 50 to 100.
+          let angle = Math.random() * 360;
+          let mass = Math.random() * 45 + 5; // 5 to 50.
+          let radius = Math.cbrt(mass) * 2; // simple radius estimate.
+          let x = star.x + currentDistance * Math.cos(angle * (Math.PI / 180));
+          let y = star.y + currentDistance * Math.sin(angle * (Math.PI / 180));
+          let planet = new Body(x, y, mass, radius, getRandomColor());
+          planet.parent = star;
+          let orbitalSpeed = Math.sqrt((G * star.mass) / currentDistance);
+          planet.vx = -orbitalSpeed * Math.sin(angle * (Math.PI / 180));
+          planet.vy = orbitalSpeed * Math.cos(angle * (Math.PI / 180));
+          bodies.push(planet);
+          // With 50% probability, add a moon.
+          if (Math.random() < 0.5) {
+            let moonDistance = Math.random() * 10 + 15; // 15 to 25.
+            let moonMass = Math.random() * 2 + 0.5; // 0.5 to 2.5.
+            let moonRadius = Math.cbrt(moonMass) * 2;
+            let moonAngle = Math.random() * 360;
+            let moonX =
+              planet.x + moonDistance * Math.cos(moonAngle * (Math.PI / 180));
+            let moonY =
+              planet.y + moonDistance * Math.sin(moonAngle * (Math.PI / 180));
+            let moon = new Body(moonX, moonY, moonMass, moonRadius, "lightblue");
+            moon.parent = planet;
+            let moonOrbitalSpeed = Math.sqrt((G * planet.mass) / moonDistance);
+            moon.vx = planet.vx - moonOrbitalSpeed * Math.sin(moonAngle * (Math.PI / 180));
+            moon.vy = planet.vy + moonOrbitalSpeed * Math.cos(moonAngle * (Math.PI / 180));
+            bodies.push(moon);
+          }
+        }
+        selectedBody = null;
+      }
+
+      // ========= Setup a Default Solar System =========
+      function setupDefaultSystem() {
+        bodies = [];
+        star = new Body(0, 0, 10000, 30, "yellow");
+        bodies.push(star);
+        // Create a rough solar-system configuration.
+        function createPlanet(distance, angleDegrees, mass, radius, color) {
+          let angle = angleDegrees;
+          let x = star.x + distance * Math.cos(angle * (Math.PI / 180));
+          let y = star.y + distance * Math.sin(angle * (Math.PI / 180));
+          let planet = new Body(x, y, mass, radius, color);
+          planet.parent = star;
+          let orbitalSpeed = Math.sqrt((G * star.mass) / distance);
+          planet.vx = -orbitalSpeed * Math.sin(angle * (Math.PI / 180));
+          planet.vy = orbitalSpeed * Math.cos(angle * (Math.PI / 180));
+          bodies.push(planet);
+          return planet;
+        }
+        createPlanet(120, 0, 5, 4, "gray"); // Mercury-like
+        createPlanet(160, 90, 8, 5, "orange"); // Venus-like
+        let earth = createPlanet(200, 180, 10, 8, "blue"); // Earth-like
+        createPlanet(240, 270, 6, 6, "red"); // Mars-like
+        createPlanet(320, 45, 50, 16, "brown"); // Jupiter-like
+        // Add Earth's moon.
+        function createMoon(planet, distance, angleDegrees, mass, radius, color) {
+          let angle = angleDegrees;
+          let x = planet.x + distance * Math.cos(angle * (Math.PI / 180));
+          let y = planet.y + distance * Math.sin(angle * (Math.PI / 180));
+          let moon = new Body(x, y, mass, radius, color);
+          moon.parent = planet;
+          let orbitalSpeed = Math.sqrt((G * planet.mass) / distance);
+          moon.vx = planet.vx - orbitalSpeed * Math.sin(angle * (Math.PI / 180));
+          moon.vy = planet.vy + orbitalSpeed * Math.cos(angle * (Math.PI / 180));
+          bodies.push(moon);
+          return moon;
+        }
+        createMoon(earth, 20, 45, 1, 3, "lightblue");
+        selectedBody = null;
+      }
+      // Initialize with the default system.
+      setupDefaultSystem();
+
+      // ========= Main Simulation Loop =========
+      let lastTime = performance.now();
+      function update() {
+        const now = performance.now();
+        const dt = ((now - lastTime) / 1000) * timeMultiplier;
+        lastTime = now;
+
+        if (!paused) {
+          // --- Compute Newtonian Gravitational Forces (with a simple 1PN correction for bodies orbiting the star) ---
+          for (let i = 0; i < bodies.length; i++) {
+            for (let j = i + 1; j < bodies.length; j++) {
+              let bA = bodies[i],
+                bB = bodies[j];
+              const dx = bB.x - bA.x;
+              const dy = bB.y - bA.y;
+              const r = Math.hypot(dx, dy);
+              if (r === 0) continue;
+              let correctionFactor = 1;
+              // A simple 1PN-like correction for bodies orbiting the star.
+              if (
+                (bA === star && bB.parent === star) ||
+                (bB === star && bA.parent === star)
+              ) {
+                let body = bA === star ? bB : bA;
+                let dx_c = body.x - star.x;
+                let dy_c = body.y - star.y;
+                let r_c = Math.hypot(dx_c, dy_c);
+                let relVx = body.vx - star.vx;
+                let relVy = body.vy - star.vy;
+                let L_val = Math.abs(dx_c * relVy - dy_c * relVx);
+                correctionFactor = 1 + (3 * L_val * L_val) / (r_c * r_c * c * c);
+              }
+              const force = (G * bA.mass * bB.mass) / (r * r) * correctionFactor;
+              const fx = (force * dx) / r;
+              const fy = (force * dy) / r;
+              bA.applyForce(fx, fy);
+              bB.applyForce(-fx, -fy);
+            }
+          }
+
+          // --- Update Positions for All Bodies ---
+          bodies.forEach((body) => body.update(dt));
+
+          // --- Handle Collisions (always merging) ---
+          handleCollisions();
+
+          // --- Dynamic Parent Reassignment for Satellites ---
+          bodies.forEach((body) => {
+            if (body.parent && body.parent !== star) {
+              const d = Math.hypot(body.x - body.parent.x, body.y - body.parent.y);
+              const hill = getHillRadius(body.parent);
+              if (d > hill * 0.8) {
+                body.parent = star;
+              }
+            }
+          });
+
+          // --- If an object is selected, smoothly follow it with the camera ---
+          if (selectedBody) {
+            camera.x += (selectedBody.x - camera.x) * 0.1;
+            camera.y += (selectedBody.y - camera.y) * 0.1;
+          }
+        }
+
+        // --- Update the Info Overlay with Selected Object Stats ---
+        if (selectedBody) {
+          const speed = Math.hypot(selectedBody.vx, selectedBody.vy);
+          infoDiv.innerHTML = `<b>Selected Object</b><br>
+            Mass: ${selectedBody.mass.toFixed(2)} (sim units)<br>
+            Radius: ${(selectedBody.radius * scaleToMeters).toExponential(2)} m<br>
+            Speed: ${speed.toFixed(2)} u/s<br>
+            Position: (${selectedBody.x.toFixed(2)}, ${selectedBody.y.toFixed(2)}) u<br>
+            ${selectedBody.parent === star ? "Orbiting: Star" : "Orbiting: Planet"}
+          `;
+        } else {
+          infoDiv.innerHTML = "Click an object to view its stats.";
+        }
+
+        // --- Rendering (Apply Camera Transformation) ---
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.scale(camera.zoom, camera.zoom);
+        ctx.translate(-camera.x, -camera.y);
+        drawTrails();
+        bodies.forEach((body) => body.draw(ctx));
+        ctx.restore();
+
+        requestAnimationFrame(update);
+      }
+      update();
+    </script>
+  </body>
+</html>
