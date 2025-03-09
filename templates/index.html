@@ -1,195 +1,367 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Celestial Gravity Simulation - Random Systems & Object Stats</title>
-    <style>
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        background: #000;
-        font-family: sans-serif;
-        color: #fff;
-      }
-      canvas {
-        display: block;
-        background: #000;
-      }
-      #controls {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        background: rgba(0, 0, 0, 0.7);
-        padding: 10px;
-        border-radius: 5px;
-        z-index: 100;
-      }
-      #controls label {
-        margin-right: 10px;
-      }
-      #controls button {
-        margin-left: 10px;
-      }
-      #info {
-        position: fixed;
-        bottom: 10px;
-        left: 10px;
-        background: rgba(0, 0, 0, 0.7);
-        padding: 10px;
-        border-radius: 5px;
-        max-width: 220px;
-        z-index: 101;
-      }
-    </style>
-  </head>
-  <body>
-    <canvas id="canvas"></canvas>
-    <div id="controls">
-      <label for="timeSpeed">
-        Time Speed: <span id="speedValue">1</span>x
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Celestial Gravity Simulation - Beta v2</title>
+  <style>
+    /* Base page styles */
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: sans-serif;
+      color: #fff;
+    }
+    canvas {
+      display: block;
+      background: #000;
+    }
+    /* Controls panel (top-left) */
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.75);
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 100;
+    }
+    #controls label,
+    #controls select,
+    #controls input,
+    #controls button {
+      margin: 5px;
+    }
+    /* Save/Load panel (top-right) */
+    #saveLoadControls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.75);
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 101;
+    }
+    #saveLoadControls select,
+    #saveLoadControls button {
+      margin: 5px;
+    }
+    /* Info overlay (bottom-left) */
+    #info {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.75);
+      padding: 10px;
+      border-radius: 5px;
+      max-width: 240px;
+      z-index: 102;
+    }
+    /* Spawn Menu (Sleek spawn interface) */
+    #spawnModal {
+      display: none;
+      position: absolute;
+      z-index: 500;
+      background: rgba(20,20,20,0.9);
+      padding: 0;
+      border-radius: 5px;
+      width: 300px;
+      max-height: 80vh;
+      overflow: auto;
+    }
+    /* Draggable Header for Spawn Menu */
+    #spawnHeader {
+      background: rgba(20,20,20,0.95);
+      padding: 10px;
+      cursor: move;
+      text-align: center;
+      font-weight: bold;
+      border-radius: 5px 5px 0 0;
+      user-select: none;
+    }
+    /* Spawn form elements */
+    #spawnModal form label {
+      display: block;
+      margin: 5px 0;
+      font-size: 14px;
+    }
+    #spawnModal form input[type="number"],
+    #spawnModal form input[type="text"],
+    #spawnModal form select {
+      width: 100%;
+      padding: 5px;
+      margin-top: 5px;
+      margin-bottom: 10px;
+      border-radius: 3px;
+      border: none;
+      text-align: center;
+    }
+    #spawnModal form button {
+      padding: 5px 10px;
+      border-radius: 3px;
+      border: none;
+      cursor: pointer;
+      margin-right: 5px;
+    }
+    #spawnModal form button:hover {
+      background: #555;
+    }
+    /* Orbit preview canvas */
+    #orbitPreviewCanvas {
+      border: 1px dashed #fff;
+      display: block;
+      margin: 10px auto;
+      background: #000;
+    }
+    /* Integration Modal (unchanged) */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 500;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.8);
+    }
+    .modal-content {
+      background-color: #222;
+      margin: 10% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      width: 300px;
+      border-radius: 5px;
+      color: #fff;
+    }
+    .close {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .close:hover, .close:focus {
+      color: #fff;
+    }
+    input[type="number"], select, input[type="text"] {
+      width: 100%;
+      padding: 5px;
+      margin-top: 5px;
+      margin-bottom: 10px;
+      border-radius: 3px;
+      border: none;
+      text-align: center;
+    }
+    button {
+      padding: 5px 10px;
+      border-radius: 3px;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #555;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <!-- Controls Panel (Top-Left) -->
+  <div id="controls">
+    <label for="timeSpeed">Time Speed: <span id="speedValue">1</span>x</label>
+    <input type="range" id="timeSpeed" min="1" max="200" step="0.5" value="1"/>
+    <button id="pauseButton">Pause</button>
+    <br/>
+    <label for="numStars">Stars:</label>
+    <select id="numStars">
+      <option value="1" selected>1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+    </select>
+    <button id="randomSystemButton">Generate Random System</button>
+    <br/>
+    <button id="randomizeButton">Randomize Bodies</button>
+    <button id="clearSimulationButton">Clear Simulation</button>
+    <br/>
+    <button id="addPlanetButton">Spawn Planet</button>
+    <button id="addStarButton">Spawn Star</button>
+    <button id="addMoonButton">Spawn Moon</button>
+    <br/>
+    <button id="integrationOptionsButton">Integration Options</button>
+    <br/>
+    <!-- Prebuilt Systems UI -->
+    <label for="prebuiltSelect">Prebuilt Systems:</label>
+    <select id="prebuiltSelect">
+      <option value="">--Select--</option>
+      <option value="solar">Solar System (Enhanced)</option>
+      <option value="binary">Binary Star System (Enhanced)</option>
+    </select>
+    <button id="loadPrebuiltButton">Load Prebuilt</button>
+    <br/>
+    <span>(Drag to pan, scroll to zoom, click an object for stats)</span>
+  </div>
+
+  <!-- Save/Load Panel (Top-Right) -->
+  <div id="saveLoadControls">
+    <select id="savedSystems"></select>
+    <button id="saveSystemButton">Save System</button>
+    <button id="loadSystemButton">Load System</button>
+    <button id="deleteSystemButton">Delete System</button>
+  </div>
+
+  <!-- Info Overlay (Bottom-Left) -->
+  <div id="info">Click an object to view its stats.</div>
+
+  <!-- Spawn Menu (Sleek spawn interface) -->
+  <div id="spawnModal">
+    <div id="spawnHeader">Spawn New <span id="spawnTypeDisplay"></span></div>
+    <form id="spawnForm">
+      <label>Mass (sim units):
+        <input type="number" id="spawnMass" step="0.1" required/>
       </label>
-      <input type="range" id="timeSpeed" min="1" max="200" step="0.5" value="1" />
-      <button id="pauseButton">Pause</button>
-      <button id="randomSystemButton">Generate Random System</button>
-      <span>(Drag to pan, scroll to zoom)</span>
+      <label>Radius (sim units, leave blank for auto):
+        <input type="number" id="spawnRadius" step="0.1"/>
+      </label>
+      <label>Initial vx (u/s):
+        <input type="number" id="spawnVx" step="0.1" required/>
+      </label>
+      <label>Initial vy (u/s):
+        <input type="number" id="spawnVy" step="0.1" required/>
+      </label>
+      <!-- Only for stars -->
+      <div id="starTypeContainer" style="display:none;">
+        <label>Star Type:
+          <select id="spawnStarType">
+            <option value="Yellow Star">Yellow Star</option>
+            <option value="Red Dwarf">Red Dwarf</option>
+            <option value="Brown Dwarf">Brown Dwarf</option>
+            <option value="Red Supergiant">Red Supergiant</option>
+            <option value="Blue Giant">Blue Giant</option>
+            <option value="Blue Hypergiant">Blue Hypergiant</option>
+            <option value="Black Hole">Black Hole</option>
+          </select>
+        </label>
+      </div>
+      <!-- Preview Canvas: Shows grayed-out object & estimated orbit -->
+      <canvas id="orbitPreviewCanvas" width="200" height="200"></canvas>
+      <p id="orbitPreviewText" style="text-align:center; font-size:14px;"></p>
+      <button type="submit">Place Object</button>
+      <button type="button" id="cancelSpawn">Cancel</button>
+    </form>
+  </div>
+
+  <!-- Integration Options Modal (unchanged) -->
+  <div id="integrationModal" class="modal">
+    <div class="modal-content">
+      <span id="closeIntegrationModal" class="close">&times;</span>
+      <h2>Integration Options</h2>
+      <form id="integrationForm">
+        <label><input type="radio" name="integrationMethod" value="euler" checked/> Euler</label><br/>
+        <label><input type="radio" name="integrationMethod" value="rk4"/> RK4</label><br/>
+        <button type="submit">Confirm</button>
+        <button type="button" id="cancelIntegration">Cancel</button>
+      </form>
     </div>
-    <div id="info">Click an object to view its stats.</div>
-    <script>
-      // ========= Canvas, Camera, and Resize Setup =========
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      // Setup canvas, context, info overlay
       const canvas = document.getElementById("canvas");
       const ctx = canvas.getContext("2d");
-      function resizeCanvas() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-      }
-      window.addEventListener("resize", resizeCanvas);
-      resizeCanvas();
+      const infoDiv = document.getElementById("info");
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
 
-      // ---------- Camera Setup ----------
-      // We'll work entirely in world coordinates. (0,0) is the star's location.
-      let camera = {
-        x: 0,
-        y: 0,
-        zoom: 1,
-      };
-
-      // ---------- Time Controls and Pause ----------
-      const timeSpeedSlider = document.getElementById("timeSpeed");
-      const speedValueLabel = document.getElementById("speedValue");
-      let timeMultiplier = parseFloat(timeSpeedSlider.value);
-      timeSpeedSlider.addEventListener("input", () => {
-        timeMultiplier = parseFloat(timeSpeedSlider.value);
-        speedValueLabel.textContent = timeSpeedSlider.value;
-      });
-      let paused = false;
-      const pauseButton = document.getElementById("pauseButton");
-      pauseButton.addEventListener("click", () => {
-        paused = !paused;
-        pauseButton.textContent = paused ? "Resume" : "Pause";
-      });
-
-      // ---------- Adding Random System Generator Button ----------
-      const randomSystemButton = document.getElementById("randomSystemButton");
-      randomSystemButton.addEventListener("click", generateRandomSolarSystem);
-
-      // ---------- Camera Controls: Panning and Zooming ----------
-      let isDragging = false;
-      let dragStart = { x: 0, y: 0 };
-      canvas.addEventListener("mousedown", (e) => {
-        isDragging = true;
-        dragStart.x = e.clientX;
-        dragStart.y = e.clientY;
-      });
-      canvas.addEventListener("mousemove", (e) => {
-        if (isDragging) {
-          let dx = (e.clientX - dragStart.x) / camera.zoom;
-          let dy = (e.clientY - dragStart.y) / camera.zoom;
-          // Only update camera position if not following an object.
-          if (!selectedBody) {
-            camera.x -= dx;
-            camera.y -= dy;
-          }
-          dragStart.x = e.clientX;
-          dragStart.y = e.clientY;
-        }
-      });
-      canvas.addEventListener("mouseup", () => {
-        isDragging = false;
-      });
-      canvas.addEventListener("mouseout", () => {
-        isDragging = false;
-      });
-      canvas.addEventListener("wheel", (e) => {
-        e.preventDefault();
-        let zoomAmount = -e.deltaY * 0.001;
-        camera.zoom = Math.max(
-          0.1,
-          Math.min(camera.zoom * (1 + zoomAmount), 10)
-        );
-      });
-
-      // ========= Global Simulation Parameters =========
-      const G = 0.5; // Scaled Newtonian gravitational constant.
-      const maxTrailLength = 200; // Number of past positions (for trails).
-      // "Speed of light" in simulation units, for potential relativity corrections.
+      // Global variables
+      const G = 0.5;
+      const maxTrailLength = 200;
       const c = 100;
-      // Conversion factor: 1 simulation unit = 1e6 meters.
       const scaleToMeters = 1e6;
+      let bodies = [];
+      let star = null;
+      let selectedBody = null;
+      let camera = { x: 0, y: 0, zoom: 1 };
+      let timeMultiplier = parseFloat(document.getElementById("timeSpeed").value);
+      let paused = false;
+      let useRK4 = false;
+      let addMode = null;
+      let spawnLocation = null;
 
-      // ========= Body Class =========
+      // Auto-Radius: if radius is not given, compute using cube‑root scaling.
+      function computeDefaultRadius(mass, type) {
+        if (type === "blackhole") return 5;
+        else if (type === "star") return 1.4 * Math.cbrt(mass);
+        else return 2 * Math.cbrt(mass);
+      }
+
+      // Utility Functions
+      function distanceBetween(b1, b2) {
+        return Math.hypot(b2.x - b1.x, b2.y - b1.y);
+      }
+      function getHillRadius(body) {
+        if (!star) return Infinity;
+        let d = Math.hypot(body.x - star.x, body.y - star.y);
+        return d * Math.pow(body.mass / (3 * star.mass), 1/3);
+      }
+
+      // Class Definitions
       class Body {
         constructor(x, y, mass, radius, color) {
-          this.x = x;
-          this.y = y;
+          this.x = x; this.y = y;
           this.mass = mass;
-          this.radius = radius;
+          if (!radius || radius <= 0) {
+            if (color === "black") this.radius = computeDefaultRadius(mass, "blackhole");
+            else if (mass >= 1000) this.radius = computeDefaultRadius(mass, "star");
+            else this.radius = computeDefaultRadius(mass, "planet");
+          } else {
+            this.radius = radius;
+          }
           this.color = color;
-          this.vx = 0;
-          this.vy = 0;
-          this.ax = 0;
-          this.ay = 0;
-          this.parent = null; // For satellites (e.g. moons).
-          this.history = []; // For drawing its trail.
+          this.vx = 0; this.vy = 0;
+          this.ax = 0; this.ay = 0;
+          this.parent = null;
+          this.history = [];
         }
         update(dt) {
-          // Euler integration for velocity and position:
           this.vx += this.ax * dt;
           this.vy += this.ay * dt;
           this.x += this.vx * dt;
           this.y += this.vy * dt;
-          this.ax = 0;
-          this.ay = 0;
+          this.ax = 0; this.ay = 0;
           this.history.push({ x: this.x, y: this.y });
-          if (this.history.length > maxTrailLength) {
-            this.history.shift();
-          }
+          if (this.history.length > maxTrailLength) this.history.shift();
         }
         applyForce(fx, fy) {
           this.ax += fx / this.mass;
           this.ay += fy / this.mass;
         }
         draw(ctx) {
+          ctx.save();
           ctx.beginPath();
-          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-          ctx.fillStyle = this.color;
-          ctx.fill();
+          ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+          // If this is a black hole, draw with a radial gradient and a cool outline.
+          if (this.color === "black") {
+            let gradient = ctx.createRadialGradient(this.x, this.y, this.radius * 0.2, this.x, this.y, this.radius);
+            gradient.addColorStop(0, "#555");
+            gradient.addColorStop(1, "#000");
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "rgba(100,100,255,0.7)";
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = this.color;
+            ctx.fill();
+          }
+          ctx.restore();
         }
       }
 
-      // ========= Utility Functions =========
-      function distanceBetween(b1, b2) {
-        return Math.hypot(b2.x - b1.x, b2.y - b1.y);
-      }
-      // Estimate Hill radius for a satellite.
-      function getHillRadius(body) {
-        if (body === star) return Infinity;
-        let dToStar = Math.hypot(body.x - star.x, body.y - star.y);
-        return dToStar * Math.pow(body.mass / (3 * star.mass), 1 / 3);
-      }
-      // Always merge two bodies on collision.
+      // Collision and merging
       function mergeBodies(b1, b2) {
         let newMass = b1.mass + b2.mass;
         let newX = (b1.x * b1.mass + b2.x * b2.mass) / newMass;
@@ -197,20 +369,17 @@
         let newVx = (b1.vx * b1.mass + b2.vx * b2.mass) / newMass;
         let newVy = (b1.vy * b1.mass + b2.vy * b2.mass) / newMass;
         let newRadius = Math.cbrt(Math.pow(b1.radius, 3) + Math.pow(b2.radius, 3));
-        let newParent = b1.parent === b2.parent ? b1.parent : star;
-        let newColor = b1.mass >= b2.mass ? b1.color : b2.color;
+        let newParent = (b1.parent === b2.parent) ? b1.parent : star;
+        let newColor = (b1.mass >= b2.mass) ? b1.color : b2.color;
         let merged = new Body(newX, newY, newMass, newRadius, newColor);
-        merged.vx = newVx;
-        merged.vy = newVy;
+        merged.vx = newVx; merged.vy = newVy;
         merged.parent = newParent;
         merged.history = b1.history.concat(b2.history).slice(-maxTrailLength);
         return merged;
       }
-      // Collision resolver that always merges overlapping bodies.
       function resolveCollision(b1, b2) {
         return mergeBodies(b1, b2);
       }
-      // Loop over all pairs and merge colliding bodies.
       function handleCollisions() {
         let collisionOccurred = true;
         while (collisionOccurred) {
@@ -232,9 +401,8 @@
           }
         }
       }
-      // Draw each body's trail.
       function drawTrails() {
-        bodies.forEach((body) => {
+        bodies.forEach(body => {
           if (body.history.length < 2) return;
           ctx.save();
           ctx.beginPath();
@@ -251,214 +419,663 @@
         });
       }
 
-      // ========= Global Variables for Simulation =========
-      let bodies = [];
-      let star; // the central star
-      let selectedBody = null; // The object that is clicked on and followed.
-      const infoDiv = document.getElementById("info");
-
-      // ========= Click-to-Select & Follow =========
-      canvas.addEventListener("click", (e) => {
-        // Convert click coordinates to world coordinates.
-        const rect = canvas.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const clickY = e.clientY - rect.top;
-        const worldX = (clickX - canvas.width / 2) / camera.zoom + camera.x;
-        const worldY = (clickY - canvas.height / 2) / camera.zoom + camera.y;
-        let clickedBody = null;
-        let minDist = Infinity;
-        for (let body of bodies) {
-          let d = Math.hypot(body.x - worldX, body.y - worldY);
-          if (d < body.radius && d < minDist) {
-            clickedBody = body;
-            minDist = d;
-          }
+      // Integration Helpers (RK4)
+      function getState() {
+        return bodies.map(b => ({ x: b.x, y: b.y, vx: b.vx, vy: b.vy }));
+      }
+      function setState(newState) {
+        for (let i = 0; i < bodies.length; i++) {
+          bodies[i].x = newState[i].x;
+          bodies[i].y = newState[i].y;
+          bodies[i].vx = newState[i].vx;
+          bodies[i].vy = newState[i].vy;
+          bodies[i].history.push({ x: bodies[i].x, y: bodies[i].y });
+          if (bodies[i].history.length > maxTrailLength) bodies[i].history.shift();
         }
-        selectedBody = clickedBody; // May be null if no object was clicked.
-      });
+      }
+      function computeDerivatives(state) {
+        let derivs = [];
+        for (let i = 0; i < state.length; i++) {
+          let dxdt = state[i].vx;
+          let dydt = state[i].vy;
+          let dvxdt = 0, dvydt = 0;
+          for (let j = 0; j < state.length; j++) {
+            if (i === j) continue;
+            let dx = state[j].x - state[i].x;
+            let dy = state[j].y - state[i].y;
+            let r = Math.hypot(dx, dy);
+            if (r === 0) continue;
+            let correctionFactor = 1;
+            let bA = bodies[i], bB = bodies[j];
+            if ((bA === star && bB.parent === star) || (bB === star && bA.parent === star)) {
+              let dx_c = bA === star ? state[j].x - star.x : state[i].x - star.x;
+              let dy_c = bA === star ? state[j].y - star.y : state[i].y - star.y;
+              let r_c = Math.hypot(dx_c, dy_c);
+              let relVx = bA === star ? bB.vx - star.vx : bA.vx - star.vx;
+              let relVy = bA === star ? bB.vy - star.vy : bA.vy - star.vy;
+              let L_val = Math.abs(dx_c * relVy - dy_c * relVx);
+              correctionFactor = 1 + (3 * L_val * L_val) / (r_c * r_c * c * c);
+            }
+            let forceMag = (G * bodies[i].mass * bodies[j].mass) / (r * r) * correctionFactor;
+            dvxdt += (forceMag * dx / r) / bodies[i].mass;
+            dvydt += (forceMag * dy / r) / bodies[i].mass;
+          }
+          derivs.push({ dx: dxdt, dy: dydt, dvx: dvxdt, dvy: dvydt });
+        }
+        return derivs;
+      }
+      function rk4Step(dt) {
+        let state0 = getState();
+        let k1 = computeDerivatives(state0);
+        let state1 = state0.map((s, i) => ({
+          x: s.x + k1[i].dx * dt / 2,
+          y: s.y + k1[i].dy * dt / 2,
+          vx: s.vx + k1[i].dvx * dt / 2,
+          vy: s.vy + k1[i].dvy * dt / 2
+        }));
+        let k2 = computeDerivatives(state1);
+        let state2 = state0.map((s, i) => ({
+          x: s.x + k2[i].dx * dt / 2,
+          y: s.y + k2[i].dy * dt / 2,
+          vx: s.vx + k2[i].dvx * dt / 2,
+          vy: s.vy + k2[i].dvy * dt / 2
+        }));
+        let k3 = computeDerivatives(state2);
+        let state3 = state0.map((s, i) => ({
+          x: s.x + k3[i].dx * dt,
+          y: s.y + k3[i].dy * dt,
+          vx: s.vx + k3[i].dvx * dt,
+          vy: s.vy + k3[i].dvy * dt
+        }));
+        let k4 = computeDerivatives(state3);
+        let newState = state0.map((s, i) => ({
+          x: s.x + dt * (k1[i].dx + 2*k2[i].dx + 2*k3[i].dx + k4[i].dx) / 6,
+          y: s.y + dt * (k1[i].dy + 2*k2[i].dy + 2*k3[i].dy + k4[i].dy) / 6,
+          vx: s.vx + dt * (k1[i].dvx + 2*k2[i].dvx + 2*k3[i].dvx + k4[i].dvx) / 6,
+          vy: s.vy + dt * (k1[i].dvy + 2*k2[i].dvy + 2*k3[i].dvy + k4[i].dvy) / 6
+        }));
+        setState(newState);
+      }
 
-      // ========= Random Solar System Generator =========
+      // Star Type and Color Helpers
+      function chooseStarAttributes(starType) {
+        starType = starType.toLowerCase();
+        if (starType.includes("red dwarf")) {
+          return { mass: 3000, radius: 0, color: "red" };
+        } else if (starType.includes("brown dwarf")) {
+          return { mass: 5000, radius: 0, color: "brown" };
+        } else if (starType.includes("red supergiant")) {
+          return { mass: 30000, radius: 0, color: "darkred" };
+        } else if (starType.includes("blue giant")) {
+          return { mass: 20000, radius: 0, color: "blue" };
+        } else if (starType.includes("blue hypergiant")) {
+          return { mass: 50000, radius: 0, color: "lightblue" };
+        } else if (starType.includes("black hole")) {
+          return { mass: 15000, radius: 0, color: "black" };
+        } else {
+          return { mass: 10000, radius: 0, color: "yellow" };
+        }
+      }
       function getRandomColor() {
         const colors = ["blue", "red", "orange", "green", "purple", "brown", "gray"];
-        return colors[Math.floor(Math.random() * colors.length)];
-      }
-      function generateRandomSolarSystem() {
-        bodies = []; // Clear existing bodies.
-        // Create the central star at (0,0).
-        star = new Body(0, 0, 10000, 30, "yellow");
-        bodies.push(star);
-        // Generate a random number of planets (say 3 to 7).
-        let numPlanets = Math.floor(Math.random() * 5) + 3;
-        let currentDistance = 100;
-        for (let i = 0; i < numPlanets; i++) {
-          // Increase the distance sequentially.
-          currentDistance += Math.random() * 50 + 50; // Increase by 50 to 100.
-          let angle = Math.random() * 360;
-          let mass = Math.random() * 45 + 5; // 5 to 50.
-          let radius = Math.cbrt(mass) * 2; // simple radius estimate.
-          let x = star.x + currentDistance * Math.cos(angle * (Math.PI / 180));
-          let y = star.y + currentDistance * Math.sin(angle * (Math.PI / 180));
-          let planet = new Body(x, y, mass, radius, getRandomColor());
-          planet.parent = star;
-          let orbitalSpeed = Math.sqrt((G * star.mass) / currentDistance);
-          planet.vx = -orbitalSpeed * Math.sin(angle * (Math.PI / 180));
-          planet.vy = orbitalSpeed * Math.cos(angle * (Math.PI / 180));
-          bodies.push(planet);
-          // With 50% probability, add a moon.
-          if (Math.random() < 0.5) {
-            let moonDistance = Math.random() * 10 + 15; // 15 to 25.
-            let moonMass = Math.random() * 2 + 0.5; // 0.5 to 2.5.
-            let moonRadius = Math.cbrt(moonMass) * 2;
-            let moonAngle = Math.random() * 360;
-            let moonX =
-              planet.x + moonDistance * Math.cos(moonAngle * (Math.PI / 180));
-            let moonY =
-              planet.y + moonDistance * Math.sin(moonAngle * (Math.PI / 180));
-            let moon = new Body(moonX, moonY, moonMass, moonRadius, "lightblue");
-            moon.parent = planet;
-            let moonOrbitalSpeed = Math.sqrt((G * planet.mass) / moonDistance);
-            moon.vx = planet.vx - moonOrbitalSpeed * Math.sin(moonAngle * (Math.PI / 180));
-            moon.vy = planet.vy + moonOrbitalSpeed * Math.cos(moonAngle * (Math.PI / 180));
-            bodies.push(moon);
-          }
-        }
-        selectedBody = null;
+        return colors[Math.floor(Math.random()*colors.length)];
       }
 
-      // ========= Setup a Default Solar System =========
+      // Setup Default System
       function setupDefaultSystem() {
         bodies = [];
-        star = new Body(0, 0, 10000, 30, "yellow");
+        star = new Body(0, 0, 10000, 0, "yellow");
         bodies.push(star);
-        // Create a rough solar-system configuration.
-        function createPlanet(distance, angleDegrees, mass, radius, color) {
-          let angle = angleDegrees;
-          let x = star.x + distance * Math.cos(angle * (Math.PI / 180));
-          let y = star.y + distance * Math.sin(angle * (Math.PI / 180));
+        function createPlanet(dist, angleDeg, mass, radius, color) {
+          let angle = angleDeg * Math.PI/180;
+          let x = star.x + dist * Math.cos(angle);
+          let y = star.y + dist * Math.sin(angle);
           let planet = new Body(x, y, mass, radius, color);
           planet.parent = star;
-          let orbitalSpeed = Math.sqrt((G * star.mass) / distance);
-          planet.vx = -orbitalSpeed * Math.sin(angle * (Math.PI / 180));
-          planet.vy = orbitalSpeed * Math.cos(angle * (Math.PI / 180));
+          let orbitalSpeed = Math.sqrt((G * star.mass)/dist);
+          planet.vx = -orbitalSpeed * Math.sin(angle);
+          planet.vy = orbitalSpeed * Math.cos(angle);
           bodies.push(planet);
           return planet;
         }
-        createPlanet(120, 0, 5, 4, "gray"); // Mercury-like
-        createPlanet(160, 90, 8, 5, "orange"); // Venus-like
-        let earth = createPlanet(200, 180, 10, 8, "blue"); // Earth-like
-        createPlanet(240, 270, 6, 6, "red"); // Mars-like
-        createPlanet(320, 45, 50, 16, "brown"); // Jupiter-like
-        // Add Earth's moon.
-        function createMoon(planet, distance, angleDegrees, mass, radius, color) {
-          let angle = angleDegrees;
-          let x = planet.x + distance * Math.cos(angle * (Math.PI / 180));
-          let y = planet.y + distance * Math.sin(angle * (Math.PI / 180));
+        createPlanet(120, 0, 5, 0, "gray");
+        createPlanet(160, 90, 8, 0, "orange");
+        let earth = createPlanet(200, 180, 10, 0, "blue");
+        createPlanet(240, 270, 6, 0, "red");
+        createPlanet(320, 45, 50, 0, "brown");
+        function createMoon(planet, dist, angleDeg, mass, radius, color) {
+          let angle = angleDeg * Math.PI/180;
+          let x = planet.x + dist * Math.cos(angle);
+          let y = planet.y + dist * Math.sin(angle);
           let moon = new Body(x, y, mass, radius, color);
           moon.parent = planet;
-          let orbitalSpeed = Math.sqrt((G * planet.mass) / distance);
-          moon.vx = planet.vx - orbitalSpeed * Math.sin(angle * (Math.PI / 180));
-          moon.vy = planet.vy + orbitalSpeed * Math.cos(angle * (Math.PI / 180));
+          let orbSpeed = Math.sqrt((G * planet.mass)/dist);
+          moon.vx = planet.vx - orbSpeed * Math.sin(angle);
+          moon.vy = planet.vy + orbSpeed * Math.cos(angle);
           bodies.push(moon);
           return moon;
         }
-        createMoon(earth, 20, 45, 1, 3, "lightblue");
+        createMoon(earth, 20, 45, 1, 0, "lightblue");
         selectedBody = null;
       }
-      // Initialize with the default system.
       setupDefaultSystem();
 
-      // ========= Main Simulation Loop =========
+      // Prebuilt Systems
+      function loadPrebuiltSystem(name) {
+        bodies = [];
+        selectedBody = null;
+        camera = { x: 0, y: 0, zoom: 1 };
+        if (name === "solar") {
+          // Enhanced Solar System
+          let mainStar = new Body(0, 0, 12000, 0, "yellow");
+          bodies.push(mainStar);
+          star = mainStar;
+          let mercury = new Body(150, 0, 5, 0, "gray");
+          mercury.vy = Math.sqrt((G * mainStar.mass) / 150);
+          mercury.parent = mainStar;
+          bodies.push(mercury);
+          let venus = new Body(220, 0, 8, 0, "orange");
+          venus.vy = Math.sqrt((G * mainStar.mass) / 220);
+          venus.parent = mainStar;
+          bodies.push(venus);
+          let earth = new Body(300, 0, 10, 0, "blue");
+          earth.vy = Math.sqrt((G * mainStar.mass) / 300);
+          earth.parent = mainStar;
+          bodies.push(earth);
+          let moon = new Body(earth.x + 20, earth.y, 1, 0, "lightblue");
+          moon.vx = earth.vx;
+          moon.vy = earth.vy + 1.5;
+          moon.parent = earth;
+          bodies.push(moon);
+          let mars = new Body(370, 0, 6, 0, "red");
+          mars.vy = Math.sqrt((G * mainStar.mass) / 370);
+          mars.parent = mainStar;
+          bodies.push(mars);
+          let jupiter = new Body(500, 0, 50, 0, "brown");
+          jupiter.vy = Math.sqrt((G * mainStar.mass) / 500);
+          jupiter.parent = mainStar;
+          bodies.push(jupiter);
+        } else if (name === "binary") {
+          let d = 300;
+          let m = 7000;
+          let star1 = new Body(-d/2, 0, m, 0, "yellow");
+          let star2 = new Body(d/2, 0, m, 0, "red");
+          let v = Math.sqrt((G * m) / (2 * d));
+          star1.vy = -v;
+          star2.vy = v;
+          bodies.push(star1, star2);
+          star = star1;
+          let planet1 = new Body(0, 500, 15, 0, "green");
+          planet1.vx = Math.sqrt((G * (m + m)) / 500);
+          planet1.parent = star1;
+          bodies.push(planet1);
+          let planet2 = new Body(0, 700, 12, 0, "blue");
+          planet2.vx = Math.sqrt((G * (m + m)) / 700);
+          planet2.parent = star1;
+          bodies.push(planet2);
+        }
+      }
+
+      // Random Solar System Generator
+      function generateRandomSolarSystem() {
+        bodies = [];
+        selectedBody = null;
+        camera = { x: 0, y: 0, zoom: 1 };
+        let numStars = parseInt(document.getElementById("numStars").value);
+        let stars = [];
+        if (numStars === 1) {
+          let attrs = chooseStarAttributes("");
+          let starObj = new Body(0, 0, attrs.mass, 0, attrs.color);
+          stars.push(starObj); bodies.push(starObj);
+        } else if (numStars === 2) {
+          let d = 150 + Math.random() * 50;
+          let attrs1 = chooseStarAttributes("");
+          let attrs2 = chooseStarAttributes("");
+          let m = attrs1.mass;
+          let star1 = new Body(-d/2, 0, m, 0, attrs1.color);
+          let star2 = new Body(d/2, 0, m, 0, attrs2.color);
+          let v = Math.sqrt((G * m) / (2 * d));
+          star1.vy = -v;
+          star2.vy = v;
+          stars.push(star1, star2); bodies.push(star1, star2);
+        } else if (numStars === 3) {
+          let d = 150 + Math.random() * 50;
+          for (let i = 0; i < 3; i++) {
+            let angle = (2*Math.PI/3)*i;
+            let attrs = chooseStarAttributes("");
+            let starObj = new Body(d * Math.cos(angle), d * Math.sin(angle), attrs.mass, 0, attrs.color);
+            let v = Math.sqrt((G * starObj.mass) / d);
+            starObj.vx = -v * Math.sin(angle);
+            starObj.vy = v * Math.cos(angle);
+            stars.push(starObj); bodies.push(starObj);
+          }
+        }
+        star = stars[0] || null;
+        let maxDist = 0;
+        for (let s of stars) {
+          let dist = Math.hypot(s.x, s.y);
+          if (dist > maxDist) maxDist = dist;
+        }
+        let currentDistance = maxDist + (50 + Math.random() * 50);
+        let numPlanets = Math.floor(Math.random() * 5) + 3;
+        for (let i = 0; i < numPlanets; i++) {
+          currentDistance += 50 + Math.random() * 100;
+          let angle = Math.random() * 360;
+          let mass = 5 + Math.random() * 45;
+          let x = currentDistance * Math.cos(angle * Math.PI/180);
+          let y = currentDistance * Math.sin(angle * Math.PI/180);
+          let planet = new Body(x, y, mass, 0, getRandomColor());
+          let totalStarMass = stars.reduce((sum, s) => sum + s.mass, 0);
+          planet.vx = -Math.sqrt((G * totalStarMass) / currentDistance) * Math.sin(angle * Math.PI/180);
+          planet.vy = Math.sqrt((G * totalStarMass) / currentDistance) * Math.cos(angle * Math.PI/180);
+          planet.parent = stars[0] || null;
+          bodies.push(planet);
+          let moonCount = Math.floor(Math.random() * 4);
+          for (let j = 0; j < moonCount; j++) {
+            let mdist = 10 + Math.random() * 15;
+            let mangle = Math.random() * 360;
+            let mmass = 0.1 + Math.random() * 4.9;
+            let mx = planet.x + mdist * Math.cos(mangle * Math.PI/180);
+            let my = planet.y + mdist * Math.sin(mangle * Math.PI/180);
+            let moon = new Body(mx, my, mmass, 0, "lightblue");
+            moon.parent = planet;
+            let moSpeed = Math.sqrt((G * planet.mass) / mdist);
+            moon.vx = planet.vx - moSpeed * Math.sin(mangle * Math.PI/180);
+            moon.vy = planet.vy + moSpeed * Math.cos(mangle * Math.PI/180);
+            bodies.push(moon);
+          }
+        }
+      }
+
+      // Randomize Bodies
+      function randomizeBodies() {
+        bodies.forEach(b => {
+          b.x = (Math.random() - 0.5) * 800;
+          b.y = (Math.random() - 0.5) * 800;
+          b.vx = (Math.random() - 0.5) * 4;
+          b.vy = (Math.random() - 0.5) * 4;
+          b.history = [];
+        });
+      }
+
+      // Clear Simulation
+      function clearSimulation() {
+        bodies = [];
+        star = null;
+        selectedBody = null;
+        camera = { x: 0, y: 0, zoom: 1 };
+        infoDiv.innerHTML = "Simulation cleared. Click an object to view its stats.";
+      }
+
+      // Interactive Spawning
+      const addPlanetButton = document.getElementById("addPlanetButton");
+      const addStarButton = document.getElementById("addStarButton");
+      const addMoonButton = document.getElementById("addMoonButton");
+
+      addPlanetButton.addEventListener("click", () => {
+        paused = true; addMode = "planet";
+      });
+      addStarButton.addEventListener("click", () => {
+        paused = true; addMode = "star";
+      });
+      addMoonButton.addEventListener("click", () => {
+        paused = true; addMode = "moon";
+        if (!selectedBody || selectedBody.mass >= 1000) {
+          alert("Please select a planet (not a star) to attach the moon.");
+          addMode = null; paused = false;
+          return;
+        }
+      });
+
+      canvas.addEventListener("click", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+        const worldX = (clickX - canvas.width/2) / camera.zoom + camera.x;
+        const worldY = (clickY - canvas.height/2) / camera.zoom + camera.y;
+        if (addMode) {
+          spawnLocation = { x: worldX, y: worldY };
+          document.getElementById("spawnMass").value = "";
+          document.getElementById("spawnRadius").value = "";
+          document.getElementById("spawnVx").value = "";
+          document.getElementById("spawnVy").value = "";
+          if (addMode === "star")
+            document.getElementById("starTypeContainer").style.display = "block";
+          else
+            document.getElementById("starTypeContainer").style.display = "none";
+          document.getElementById("spawnTypeDisplay").textContent = addMode.charAt(0).toUpperCase() + addMode.slice(1);
+          let modal = document.getElementById("spawnModal");
+          modal.style.left = e.clientX + "px";
+          modal.style.top = e.clientY + "px";
+          modal.style.display = "block";
+          updateOrbitPreview();
+          return;
+        }
+        let clicked = null; let minD = Infinity;
+        for (let b of bodies) {
+          let d = Math.hypot(b.x - worldX, b.y - worldY);
+          if (d < b.radius && d < minD) { clicked = b; minD = d; }
+        }
+        selectedBody = clicked;
+      });
+
+      // Update orbit preview in spawn menu: draws grayed-out preview and estimated orbit.
+      function updateOrbitPreview() {
+        const previewCanvas = document.getElementById("orbitPreviewCanvas");
+        const previewCtx = previewCanvas.getContext("2d");
+        previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        let parent = null;
+        if (addMode === "planet" && bodies.length > 0)
+          parent = bodies[0];
+        else if (addMode === "moon" && selectedBody)
+          parent = selectedBody;
+        if (!parent) {
+          document.getElementById("orbitPreviewText").textContent = "No parent available";
+        } else {
+          let dx = spawnLocation.x - parent.x;
+          let dy = spawnLocation.y - parent.y;
+          let r = Math.hypot(dx, dy); if (r === 0) r = 1;
+          let v_circ = Math.sqrt(G * parent.mass / r);
+          document.getElementById("orbitPreviewText").textContent = "Est. Orbit Speed: " + v_circ.toFixed(2) + " u/s";
+          previewCtx.strokeStyle = "#fff";
+          previewCtx.lineWidth = 2;
+          previewCtx.setLineDash([5,5]);
+          const cx = previewCanvas.width / 2;
+          const cy = previewCanvas.height / 2;
+          let scale = Math.min(80 / r, 1);
+          previewCtx.beginPath();
+          previewCtx.arc(cx, cy, r * scale, 0, 2 * Math.PI);
+          previewCtx.stroke();
+          previewCtx.setLineDash([]);
+        }
+        let mass = parseFloat(document.getElementById("spawnMass").value) || 0;
+        let radiusInput = document.getElementById("spawnRadius").value;
+        let computedRadius = 0;
+        if (!radiusInput) {
+          computedRadius = (addMode === "star") ? computeDefaultRadius(mass, "star") : computeDefaultRadius(mass, "planet");
+        } else {
+          computedRadius = parseFloat(radiusInput);
+        }
+        let scaleFactor = 1;
+        if (parent) {
+          let dx = spawnLocation.x - parent.x;
+          let dy = spawnLocation.y - parent.y;
+          let r = Math.hypot(dx, dy); if (r === 0) r = 1;
+          scaleFactor = Math.min(80 / r, 1);
+        } else {
+          scaleFactor = 0.5;
+        }
+        previewCtx.fillStyle = "rgba(200,200,200,0.5)";
+        previewCtx.beginPath();
+        previewCtx.arc(previewCanvas.width/2, previewCanvas.height/2, computedRadius * scaleFactor, 0, 2 * Math.PI);
+        previewCtx.fill();
+      }
+      document.getElementById("spawnMass").addEventListener("input", updateOrbitPreview);
+      document.getElementById("spawnRadius").addEventListener("input", updateOrbitPreview);
+      document.getElementById("spawnVx").addEventListener("input", updateOrbitPreview);
+      document.getElementById("spawnVy").addEventListener("input", updateOrbitPreview);
+
+      // Spawn form submission
+      document.getElementById("spawnForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        let mass = parseFloat(document.getElementById("spawnMass").value);
+        let radiusInput = document.getElementById("spawnRadius").value;
+        let computedRadius = 0;
+        if (!radiusInput) {
+          computedRadius = (addMode === "star") ? computeDefaultRadius(mass, "star") : computeDefaultRadius(mass, "planet");
+        } else {
+          computedRadius = parseFloat(radiusInput);
+        }
+        let vx = parseFloat(document.getElementById("spawnVx").value);
+        let vy = parseFloat(document.getElementById("spawnVy").value);
+        let newObj;
+        if (addMode === "planet") {
+          newObj = new Body(spawnLocation.x, spawnLocation.y, mass, computedRadius, getRandomColor());
+          newObj.parent = bodies.length > 0 ? bodies[0] : null;
+        } else if (addMode === "star") {
+          let starType = document.getElementById("spawnStarType").value;
+          let attrs = chooseStarAttributes(starType);
+          newObj = new Body(spawnLocation.x, spawnLocation.y, mass, computedRadius || attrs.radius, attrs.color);
+          newObj.parent = null;
+        } else if (addMode === "moon") {
+          newObj = new Body(spawnLocation.x, spawnLocation.y, mass, computedRadius, "lightblue");
+          newObj.parent = selectedBody;
+        }
+        newObj.vx = vx; newObj.vy = vy;
+        bodies.push(newObj);
+        document.getElementById("spawnModal").style.display = "none";
+        addMode = null; paused = false;
+      });
+      document.getElementById("cancelSpawn").addEventListener("click", () => {
+        document.getElementById("spawnModal").style.display = "none";
+        addMode = null; paused = false;
+      });
+
+      // Camera panning and zooming
+      let isDragging = false;
+      let dragStart = { x: 0, y: 0 };
+      canvas.addEventListener("mousedown", (e) => {
+        isDragging = true;
+        dragStart.x = e.clientX; dragStart.y = e.clientY;
+      });
+      canvas.addEventListener("mousemove", (e) => {
+        if (isDragging) {
+          let dx = (e.clientX - dragStart.x) / camera.zoom;
+          let dy = (e.clientY - dragStart.y) / camera.zoom;
+          if (!selectedBody && !addMode) { camera.x -= dx; camera.y -= dy; }
+          dragStart.x = e.clientX; dragStart.y = e.clientY;
+        }
+      });
+      canvas.addEventListener("mouseup", () => { isDragging = false; });
+      canvas.addEventListener("mouseout", () => { isDragging = false; });
+      canvas.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        let zoomAmount = -e.deltaY * 0.001;
+        camera.zoom = Math.max(0.1, Math.min(camera.zoom * (1 + zoomAmount), 10));
+      });
+
+      // Main Simulation Loop
       let lastTime = performance.now();
       function update() {
         const now = performance.now();
         const dt = ((now - lastTime) / 1000) * timeMultiplier;
         lastTime = now;
-
         if (!paused) {
-          // --- Compute Newtonian Gravitational Forces (with a simple 1PN correction for bodies orbiting the star) ---
           for (let i = 0; i < bodies.length; i++) {
             for (let j = i + 1; j < bodies.length; j++) {
-              let bA = bodies[i],
-                bB = bodies[j];
-              const dx = bB.x - bA.x;
-              const dy = bB.y - bA.y;
-              const r = Math.hypot(dx, dy);
+              let bA = bodies[i], bB = bodies[j];
+              let dx = bB.x - bA.x;
+              let dy = bB.y - bA.y;
+              let r = Math.hypot(dx, dy);
               if (r === 0) continue;
               let correctionFactor = 1;
-              // A simple 1PN-like correction for bodies orbiting the star.
-              if (
-                (bA === star && bB.parent === star) ||
-                (bB === star && bA.parent === star)
-              ) {
-                let body = bA === star ? bB : bA;
-                let dx_c = body.x - star.x;
-                let dy_c = body.y - star.y;
+              if ((bA === star && bB.parent === star) || (bB === star && bA.parent === star)) {
+                let dx_c = bA === star ? bB.x - star.x : bA.x - star.x;
+                let dy_c = bA === star ? bB.y - star.y : bA.y - star.y;
                 let r_c = Math.hypot(dx_c, dy_c);
-                let relVx = body.vx - star.vx;
-                let relVy = body.vy - star.vy;
+                let relVx = bA === star ? bB.vx - star.vx : bA.vx - star.vx;
+                let relVy = bA === star ? bB.vy - star.vy : bA.vy - star.vy;
                 let L_val = Math.abs(dx_c * relVy - dy_c * relVx);
                 correctionFactor = 1 + (3 * L_val * L_val) / (r_c * r_c * c * c);
               }
-              const force = (G * bA.mass * bB.mass) / (r * r) * correctionFactor;
-              const fx = (force * dx) / r;
-              const fy = (force * dy) / r;
+              let force = (G * bA.mass * bB.mass) / (r * r) * correctionFactor;
+              let fx = (force * dx) / r;
+              let fy = (force * dy) / r;
               bA.applyForce(fx, fy);
               bB.applyForce(-fx, -fy);
             }
           }
-
-          // --- Update Positions for All Bodies ---
-          bodies.forEach((body) => body.update(dt));
-
-          // --- Handle Collisions (always merging) ---
+          if (useRK4) { rk4Step(dt); }
+          else { bodies.forEach(b => b.update(dt)); }
           handleCollisions();
-
-          // --- Dynamic Parent Reassignment for Satellites ---
-          bodies.forEach((body) => {
-            if (body.parent && body.parent !== star) {
-              const d = Math.hypot(body.x - body.parent.x, body.y - body.parent.y);
-              const hill = getHillRadius(body.parent);
-              if (d > hill * 0.8) {
-                body.parent = star;
-              }
+          bodies.forEach(b => {
+            if (b.parent && b.parent !== star) {
+              let d = Math.hypot(b.x - b.parent.x, b.y - b.parent.y);
+              let hill = getHillRadius(b.parent);
+              if (d > hill * 0.8) b.parent = star;
             }
           });
-
-          // --- If an object is selected, smoothly follow it with the camera ---
           if (selectedBody) {
             camera.x += (selectedBody.x - camera.x) * 0.1;
             camera.y += (selectedBody.y - camera.y) * 0.1;
           }
         }
-
-        // --- Update the Info Overlay with Selected Object Stats ---
         if (selectedBody) {
-          const speed = Math.hypot(selectedBody.vx, selectedBody.vy);
+          let speed = Math.hypot(selectedBody.vx, selectedBody.vy);
           infoDiv.innerHTML = `<b>Selected Object</b><br>
-            Mass: ${selectedBody.mass.toFixed(2)} (sim units)<br>
+            Mass: ${selectedBody.mass.toFixed(2)}<br>
             Radius: ${(selectedBody.radius * scaleToMeters).toExponential(2)} m<br>
             Speed: ${speed.toFixed(2)} u/s<br>
-            Position: (${selectedBody.x.toFixed(2)}, ${selectedBody.y.toFixed(2)}) u<br>
-            ${selectedBody.parent === star ? "Orbiting: Star" : "Orbiting: Planet"}
-          `;
+            Pos: (${selectedBody.x.toFixed(2)}, ${selectedBody.y.toFixed(2)}) u<br>
+            Orbiting: ${selectedBody.parent === star ? "Star" : "Planet"}`;
         } else {
           infoDiv.innerHTML = "Click an object to view its stats.";
         }
-
-        // --- Rendering (Apply Camera Transformation) ---
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.translate(canvas.width/2, canvas.height/2);
         ctx.scale(camera.zoom, camera.zoom);
         ctx.translate(-camera.x, -camera.y);
         drawTrails();
-        bodies.forEach((body) => body.draw(ctx));
+        bodies.forEach(b => b.draw(ctx));
         ctx.restore();
-
         requestAnimationFrame(update);
       }
       update();
-    </script>
-  </body>
+
+      // UI Event Listeners
+      document.getElementById("pauseButton").addEventListener("click", () => {
+        paused = !paused;
+        document.getElementById("pauseButton").textContent = paused ? "Resume" : "Pause";
+      });
+      document.getElementById("timeSpeed").addEventListener("input", (e) => {
+        timeMultiplier = parseFloat(e.target.value);
+        document.getElementById("speedValue").textContent = e.target.value;
+      });
+      document.getElementById("randomSystemButton").addEventListener("click", () => {
+        generateRandomSolarSystem();
+      });
+      document.getElementById("randomizeButton").addEventListener("click", () => {
+        randomizeBodies();
+      });
+      document.getElementById("clearSimulationButton").addEventListener("click", () => {
+        clearSimulation();
+      });
+      document.getElementById("loadPrebuiltButton").addEventListener("click", () => {
+        let sel = document.getElementById("prebuiltSelect");
+        let val = sel.value;
+        if (!val) { alert("Please select a prebuilt system first!"); return; }
+        loadPrebuiltSystem(val);
+      });
+      document.getElementById("integrationOptionsButton").addEventListener("click", () => {
+        document.getElementById("integrationModal").style.display = "block";
+      });
+      document.getElementById("integrationForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const method = document.querySelector('input[name="integrationMethod"]:checked').value;
+        useRK4 = (method === "rk4");
+        document.getElementById("integrationModal").style.display = "none";
+      });
+      document.getElementById("cancelIntegration").addEventListener("click", () => {
+        document.getElementById("integrationModal").style.display = "none";
+      });
+      document.getElementById("closeIntegrationModal").addEventListener("click", () => {
+        document.getElementById("integrationModal").style.display = "none";
+      });
+
+      // Save/Load Functionality
+      function getSerializableBodies() {
+        return bodies.map(b => ({
+          x: b.x, y: b.y, vx: b.vx, vy: b.vy,
+          mass: b.mass, radius: b.radius, color: b.color,
+          parentIndex: bodies.indexOf(b.parent)
+        }));
+      }
+      function loadBodies(serialized) {
+        bodies = [];
+        for (let obj of serialized) {
+          let b = new Body(obj.x, obj.y, obj.mass, obj.radius, obj.color);
+          b.vx = obj.vx; b.vy = obj.vy;
+          bodies.push(b);
+        }
+        for (let i = 0; i < serialized.length; i++) {
+          let pIdx = serialized[i].parentIndex;
+          if (pIdx >= 0 && pIdx < bodies.length)
+            bodies[i].parent = bodies[pIdx];
+        }
+        if (bodies.length > 0) { star = bodies[0]; }
+        selectedBody = null;
+        camera = { x: 0, y: 0, zoom: 1 };
+      }
+      function updateSavedSystemsSelect() {
+        let select = document.getElementById("savedSystems");
+        select.innerHTML = "";
+        let systems = JSON.parse(localStorage.getItem("savedSystems") || "{}");
+        for (let name in systems) {
+          let option = document.createElement("option");
+          option.value = name; option.textContent = name;
+          select.appendChild(option);
+        }
+      }
+      updateSavedSystemsSelect();
+      document.getElementById("saveSystemButton").addEventListener("click", () => {
+        let name = prompt("Enter a name for the saved system:");
+        if (!name) return;
+        let systems = JSON.parse(localStorage.getItem("savedSystems") || "{}");
+        systems[name] = getSerializableBodies();
+        localStorage.setItem("savedSystems", JSON.stringify(systems));
+        updateSavedSystemsSelect();
+      });
+      document.getElementById("loadSystemButton").addEventListener("click", () => {
+        let select = document.getElementById("savedSystems");
+        let name = select.value;
+        if (!name) { alert("No system selected!"); return; }
+        let systems = JSON.parse(localStorage.getItem("savedSystems") || "{}");
+        if (systems[name]) {
+          loadBodies(systems[name]);
+        } else {
+          alert("System not found.");
+        }
+      });
+      document.getElementById("deleteSystemButton").addEventListener("click", () => {
+        let select = document.getElementById("savedSystems");
+        let name = select.value;
+        if (!name) { alert("No system selected!"); return; }
+        let systems = JSON.parse(localStorage.getItem("savedSystems") || "{}");
+        if (systems[name]) {
+          delete systems[name];
+          localStorage.setItem("savedSystems", JSON.stringify(systems));
+          updateSavedSystemsSelect();
+        }
+      });
+
+      // Draggable spawn menu logic
+      (function() {
+        const spawnModal = document.getElementById("spawnModal");
+        const spawnHeader = document.getElementById("spawnHeader");
+        if (!spawnModal || !spawnHeader) return;
+        let isDragging = false;
+        let offsetX, offsetY;
+        spawnHeader.addEventListener("mousedown", function(e) {
+          isDragging = true;
+          offsetX = e.clientX - spawnModal.offsetLeft;
+          offsetY = e.clientY - spawnModal.offsetTop;
+          document.addEventListener("mousemove", drag);
+          document.addEventListener("mouseup", stopDrag);
+        });
+        function drag(e) {
+          if (!isDragging) return;
+          spawnModal.style.left = (e.clientX - offsetX) + "px";
+          spawnModal.style.top = (e.clientY - offsetY) + "px";
+        }
+        function stopDrag() {
+          isDragging = false;
+          document.removeEventListener("mousemove", drag);
+          document.removeEventListener("mouseup", stopDrag);
+        }
+      })();
+    });
+  </script>
+</body>
 </html>
